@@ -1,6 +1,6 @@
 geex.summarize.gene<-function(cll, gn) { 
   
-  gid<-CleanHtmlTags(gn);
+  gid<-as.integer(CleanHtmlTags(gn));
 
   ds<-cll$metadata$Dataset;
   d<-cll$gex_combined$logged[gid, rownames(ds)];

@@ -1,5 +1,5 @@
 # prepare the gene set table for group comparison
-geex.geneset.table<-function(gs, src, col, spe) {
+geex.geneset.table<-function(gs, src, col, spe) { 
   src<-src[1];
   col<-col[1];
   spe<-spe[1];

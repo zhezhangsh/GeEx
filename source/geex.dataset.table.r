@@ -1,16 +1,20 @@
-geex.combined.table<-function(cll, species, scale) {
+geex.combined.table<-function(cll, species, scale, ds) {
   if (scale=='unlogged') gex<-exp(cll$gex_combined$logged*log(2)) else 
     if (scale=='percentile') gex<-cll$gex_combined$percentile else 
       gex<-cll$gex_combined$logged;
-  gex<-gex[, rownames(cll$metadata$Dataset), drop=FALSE];
-  anno<-cll$gene;
-  anno<-anno[anno$Species==species, , drop=FALSE];
-  gex<-gex[rownames(anno), , drop=FALSE];
   
-  n<-apply(gex, 2, function(g) length(g[!is.na(g)]));
-  gex<-gex[, n>0, drop=FALSE];
+  ds   <- ds[ds %in% rownames(cll$metadata$Dataset)];
+  gex  <- gex[, ds, drop=FALSE];
+  anno <- cll$gene;
+  anno <- anno[anno$Species==species, , drop=FALSE];
+  gex  <- gex[rownames(anno), , drop=FALSE];
   
-  if (nrow(gex) == 0) geex.empty.matrix("No more genes after filtering") else {
+  n1   <- apply(gex, 2, function(g) length(g[!is.na(g)]));
+  n2   <- apply(gex, 1, function(g) length(g[!is.na(g)])); 
+  gex  <- gex[n2>0, n1>0, drop=FALSE];
+  anno <- anno[rownames(gex), , drop=FALSE];
+  
+  if (nrow(gex) == 0) NULL else {
     id<-rownames(gex);
     out<-data.frame(row.names=id, ID=AddHref(id, UrlEntrezGene(id)), stringsAsFactors=FALSE);
     
@@ -28,10 +32,9 @@ geex.combined.table<-function(cll, species, scale) {
     stat<-stat[, n>0, drop=FALSE];
     
     out<-cbind(out, stat);
-    out$'Mx-Mn'<-out[, 'Maximum']-out[, 'Minimum']; 
+    out$'Mx-Mn'<-round(out[, 'Maximum']-out[, 'Minimum'], 4); 
     cbind(out, round(gex, 4));
   }
-
 }
 
 geex.dataset.table<-function(cll, ds.longname, group, species, scale, extra, desc, ann, subset=c()) {

@@ -24,21 +24,21 @@ geex.load.dataset<-function(cll, ds.longname) {
 }
 
 # Load data collection
-geex.load.collection<-function(coll.name, GEX_HOME, input=NULL, output=NULL, session=NULL) {
-
-  coll.meta<-readRDS(paste(GEX_HOME, 'r', 'collection.rds', sep='/'));
+geex.load.collection<-function(coll.name, GEX_HOME, input=NULL, output=NULL, session=NULL) { 
+  coll.meta <- readRDS(paste(GEX_HOME, 'r', 'collection.rds', sep='/'));
   # Files to be loaded
-  fn.load<-c('metadata', 'metadata_by_id', 'gene', 'mapping', 'browse_table', 'gex_combined');
-    
-  if (is.na(coll.name[1]) | coll.name[1]=='') NA else {
+  fn.load <- c('metadata', 'metadata_by_id', 'gene', 'mapping', 'browse_table', 'gex_combined');
+  
+  setProgress(value = 5);
+  
+  if (is.na(coll.name[1]) | coll.name[1]=='') NULL else {
     msg<-c(); # message to return
     
-    id<-coll.name[1];
-    nm<-coll.meta[id, 'Name'];
-#     id<-strsplit(coll.name, ': ')[[1]][1];
-#     nm<-strsplit(coll.name, ': ')[[1]][2];
-    paths<-c(paste(GEX_HOME, c('public', 'private'), tolower(nm), 'r', sep='/'));
-    path<-paths[file.exists(paths)];
+    id <- coll.name[1];
+    nm <- coll.meta[id, 'Name'];
+
+    paths <- c(paste(GEX_HOME, c('public', 'private'), tolower(nm), 'r', sep='/'));
+    path  <- paths[file.exists(paths)];
     
     # Return data
     out<-list(
@@ -48,15 +48,21 @@ geex.load.collection<-function(coll.name, GEX_HOME, input=NULL, output=NULL, ses
       path=path
     );
     
+    setProgress(10); 
+    
     if (length(path) > 0) {
       path<-path[1];
       
       # Load in collection data and metadata
-      loaded<-lapply(fn.load, function(fn) {
-        fn<-paste(path, '/', fn, '.rds', sep='');
+      loaded<-lapply(fn.load, function(fn) { 
+        incProgress(); 
+        fn <- paste(path, '/', fn, '.rds', sep='');
         if (!file.exists(fn)) NA else readRDS(fn);
       });
       names(loaded)<-fn.load;
+      
+      attr(attr(loaded$gex_combined$logged, 'physical'), 'filename') <- paste(path, 'gex_ff1', sep='/'); 
+      attr(attr(loaded$gex_combined$percentile, 'physical'), 'filename') <- paste(path, 'gex_ff2', sep='/'); 
       
       # If there are required files not exist
       fn.unload<-fn.load[sapply(loaded, function(d) identical(NA, d))];
@@ -66,18 +72,20 @@ geex.load.collection<-function(coll.name, GEX_HOME, input=NULL, output=NULL, ses
       
       out$extra$longname$dataset<-paste(rownames(loaded$metadata$Dataset), loaded$metadata$Dataset$Name, sep=': ');
     } else {
-      msg<-c(msg, paste("Data collection <", nm, "> does not exist in Rchive", sep=''));
+      msg <- c(msg, paste("Data collection <", nm, "> does not exist in Rchive", sep=''));
     }
     
-    if (length(msg) == 0) msg<-paste('Data collection "', coll.name, '" has been successfully loaded.', sep='');
+    if (length(msg) == 0) msg <- paste('Data collection "', coll.name, '" has been successfully loaded.', sep='');
 
-    #gn<-out$gene;
-    #out$anno<-data.frame(ID=AddHref(rownames(gn), UrlEntrezGene(id)), Name=gn$Symbol, Species=gn$Species, NSet=gn$Num_Dataset, row.names=rownames(gn), stringsAsFactors=FALSE);
-          
     out$message<-msg;
     
-    geex.update(input, output, session, list(loaded=out)); 
-
+    setProgress(value = 80);
+    
+    if (!is.null(input) & !is.null(output) & !is.null(session)) 
+      session.data <- geex.update(input, output, session, list(loaded=out));
+    
+    setProgress(value = 95);
+    
     out;
   }
 }

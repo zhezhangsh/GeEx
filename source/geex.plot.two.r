@@ -16,14 +16,13 @@ geex.plot.two<-function(cll, xgrp, ygrp, type, scale, color, species, gn, gs) {
   } else if (identical(NA, ygrp[1]) | ygrp[1]=='') {
     plotEmpty("Group 2 not selected");
   } else {
-    d<-geex.get2group(cll, xgrp, ygrp, species[1])[, 3:4, drop=FALSE];
+    d<-geex.get2group(cll, xgrp, ygrp)[, 3:4, drop=FALSE];
     d<-d[!is.na(d[,1]) & !is.na(d[,2]), ,drop=FALSE];
     if (nrow(d) < 3) plotEmpty("Not enough data (N<3) to plot") else {
-      if(scale=='unlogged') d<-exp(geex.get2group(cll, xgrp, ygrp, species[1])[, 3:4, drop=FALSE]*log(2)) else d<-geex.get2group(cll, xgrp, ygrp, species[1], scale)[, 3:4, drop=FALSE]
+      if(scale=='unlogged') d<-exp(geex.get2group(cll, xgrp, ygrp)[, 3:4, drop=FALSE]*log(2)) else d<-geex.get2group(cll, xgrp, ygrp, scale)[, 3:4, drop=FALSE]
       
       dff<-d[,2]-d[,1];
       names(dff)<-rownames(d);
-      dff<-dff[!is.na(dff)];
       
       if (length(gn) > 0) gn<-gn[gn %in% names(dff)];
       if (length(gs) > 0) gs<-lapply(gs, function(g) g[g %in% names(dff)]);
@@ -83,15 +82,16 @@ geex.get2group.species<-function(cll, xgrp, ygrp) {
     xsp<-tolower(as.vector(meta$Dataset[xds, 'Species']));
     ysp<-tolower(as.vector(meta$Dataset[yds, 'Species']));
     
-    sp<-unique(c('human', intersect(xsp, ysp)));
-    sp[length(sp):1];
+    sp <- intersect(xsp, ysp); 
+    if (length(sp) == 0) sp <- 'human';
+    sp[1]; 
   } 
 }
 
 # Get 2 groups of data for plot
-geex.get2group<-function(cll, xgrp, ygrp, sp, scale='logged') { 
-  if (identical(NA, cll)  | xgrp=='' | ygrp=='') {
-    matrix('', nr=1, nc=01, dimnames=list('', 'Empty table'));
+geex.get2group<-function(cll, xgrp, ygrp, scale='logged') { 
+  if (identical(NULL, cll) | xgrp=='' | ygrp=='') {
+    NULL;
   } else { 
     meta<-cll$metadata;
     mp<-cll$mapping;
@@ -102,31 +102,45 @@ geex.get2group<-function(cll, xgrp, ygrp, sp, scale='logged') {
     
     xds<-as.vector(meta$Group[xid, 'Dataset']);
     yds<-as.vector(meta$Group[yid, 'Dataset']);
-
-    gex<-cll$gex_combined[[scale]][, c(xid, yid), drop=FALSE];
+    
+    sc <- scale;
+    if (scale == 'unlogged') sc <- 'logged'; 
+    
+    gex<-cll$gex_combined[[sc]][, c(xid, yid), drop=FALSE];
     gex<-gex[!is.na(gex[,1]) & !is.na(gex[,2]), , drop=FALSE];
-        
+    
+    if (scale == 'unlogged') gex <- 2^gex; 
+    
     gn<-cll$gene[, c('Species', 'Symbol'), drop=FALSE]; 
     gn<-gn[rownames(gex), , drop=FALSE];
-        
-    if (sp[1] %in% as.vector(gn[[1]])) gn<-gn[gn[[1]]==sp, , drop=FALSE] else gn<-gn[gn[[1]]=='human', , drop=FALSE]
+    
+    sp <- unique(gn[[1]]); 
+    if (length(sp[sp!='human']) != 2) gn <- gn[gn[[1]]=='human', , drop=FALSE] else gn <- gn[gn[[1]]!='human', , drop=FALSE]
+      
     gn.id<-rownames(gn);
 
     gex<-round(gex[rownames(gn), , drop=FALSE], 4);
 
-    #dx<-readRDS(paste(path, '/gex_', xds, '.rds', sep=''))$human[[1]];
-    #if (yds==xds) dy<-dx else dy<-readRDS(paste(path, '/gex_', yds, '.rds', sep=''))$human[[1]];
-    
-    #gn.id<-rownames(dx)[rownames(dx) %in% rownames(dy)]; # common gene IDs
-    #gn.nm<-cll$gene[gn.id, 'Symbol'];
-    
-    #m0<-round(dx[gn.id, xid], 4);
-    #m1<-round(dy[gn.id, yid], 4);
-    d<-data.frame(AddHref(gn.id, UrlEntrezGene(gn.id)), gn$Symbol, gex[, 1], gex[, 2], gex[, 2]-gex[, 1], stringsAsFactors = FALSE);
+    gex <- cbind(gex[, 1], gex[, 2], gex[, 2]-gex[, 1]);
+    d<-data.frame(AddHref(gn.id, UrlEntrezGene(gn.id)), gn$Symbol, round(gex, 4), stringsAsFactors = FALSE);
     names(d)<-c('ID', 'Name', xid, yid, "Diff");
     
     d;
   }
+}
+
+geex.get2data <- function(input, output, session, session.data) {
+  x.smp <- input$x.sample; 
+  y.smp <- input$y.sample;
+  x.grp <- input$x.group;
+  y.grp <- input$y.group;
+  
+  if (x.smp=='Group mean' | x.smp=='') lab.x <- x.grp else lab.x <- x.smp;
+  if (y.smp=='Group mean' | y.smp=='') lab.y <- y.grp else lab.y <- y.smp;
+  
+  session.data$two$gene <- geex.get2group(session.data$loaded, lab.x, lab.y, scale = input$two.scale);
+  output$two.table.gene <- DT::renderDataTable({ session.data$two$gene
+  }, options=dt.options2, rownames=FALSE, filter='bottom', server=TRUE, escape = FALSE);
 }
 
 #####################################################################################################################

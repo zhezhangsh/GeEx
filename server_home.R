@@ -1,65 +1,54 @@
 server_home <- function(input, output, session, session.data) {
-  load.coll0<-reactive({
-    rid1<-input$home.table_rows_selected;
-    rid2<-input$home.table_row_last_clicked;
-    
-    if(length(rid1)==0 | length(rid2)==0) NA else if (!(rid2 %in% rid1)) NA else {
-      withProgress(geex.load.collection(rid2, GEX_HOME), 
-                   message=paste("Loading data collection", rid2, '...'), 
-                   detail="\nPlease wait until data is loaded to use GeEx.");
-    } 
-  });
-  
-  load.coll<-reactive({ 
-    coll.loaded<-load.coll0();
-    if (identical(coll.loaded, NA)) NA else {
-      if(input$regroup.check) {
-        withProgress(
-          coll.loaded<-geex.regroup(coll.loaded, input$regroup.dataset_rows_selected, input$regroup.group_rows_selected), 
-          message="Re-grouping samples in collection ...", detail="\nPlease wait until the re-grouping is done.");
-        updateCheckboxInput(session, 'regroup.check', 'Uncheck box to restore default grouping');
-      } else {
-        coll.loaded$extra$regrouped<-FALSE;
-        updateCheckboxInput(session, 'regroup.check', 'Check box to activate sample re-grouping');          
-      }
-      
-      updateSelectInput(session, 'meta.options', choices=names(coll.loaded$browse_table));
-      updateSelectInput(session, 'expr.dataset', choices=coll.loaded$extra$longname$dataset);
-      updateSelectInput(session, 'pca.dataset', choices=coll.loaded$extra$longname$dataset);
-      updateSelectInput(session, 'bar.dataset', choices=coll.loaded$extra$longname$dataset);
-      updateSelectInput(session, 'geneset.dataset', choices=coll.loaded$extra$longname$dataset);
-      updateSelectInput(session, 'filter.dataset', choices=coll.loaded$extra$longname$dataset);
-      updateSelectInput(session, 'x.dataset', choices=coll.loaded$extra$longname$dataset);
-      updateSelectInput(session, 'y.dataset', choices=coll.loaded$extra$longname$dataset);      
-      updateSelectInput(session, 'comb.species', choices=unique(coll.loaded$gene$Species));
-      
-      output$bar.table <- DT::renderDataTable({ 
-        geex.load.dataset(coll.loaded, coll.loaded$extra$longname$dataset[1])$anno; 
-      }, options = dt.options3, rownames=FALSE, server=TRUE, escape = FALSE);            
-      output$coex.gene1 <- DT::renderDataTable({ 
-        coll.loaded$browse_table$Gene[, 1:5]
-      }, options = dt.options2, selection='single', rownames=FALSE, server=TRUE, escape = FALSE);   
-      output$coex.gene2 <- DT::renderDataTable({ 
-        coll.loaded$browse_table$Gene[, 1:5]
-      }, options = dt.options2, selection='single', rownames=FALSE, server=TRUE, escape = FALSE);   
-      
-      coll.loaded;
+  output$home.table <- DT::renderDataTable({
+    data.frame(ID=rownames(coll), coll, stringsAsFactors=FALSE)
+  }, options=dt.options0, selection='single', rownames=FALSE, escape=FALSE);
+
+  output$home.ui <- renderUI({
+    rw <- input$home.table_rows_selected; 
+    if (length(rw) == 0) {
+      h5(HTML('')); 
+    } else {
+      actionButton('home.button', "Load data collection", icon = icon('download'), class='dB');
     }
   });
   
-  output$home.title<-renderUI({ 
-    list(h1('Welcome to Awsomics - GeEx'), 
-         h4(HTML("<u>G</u>ene <u>e</u>xpression <u>Ex</u>plorer, beta version"))); });
-  
-  # Search table message
-  output$home.message<-renderUI({
-    if (identical(NA, load.coll())) list(h3("Click on a row to load the data collection")) else 
-      list(h3(HTML(paste("Loaded data collection", geex.html.msg(load.coll()$selection)))))
+  observeEvent(input$home.button, {
+    rid <- input$home.table_rows_selected; 
+    if (length(rid) > 0) {
+      cid <- rownames(coll)[as.integer(rid)[1]]; 
+      if (!identical(cid, session.data$loaded$id)) {
+        withProgress({
+          session.data$loaded <- geex.load.collection(cid, GEX_HOME, input, output, session);
+          session.data$coex <- list(startover = FALSE, dataset = NULL, result = NULL, cluster = NULL);
+          session.data$data <- list(meta=NULL, expr=NULL, gene=NULL, comb=NULL);
+          session.data$two <- list(gene=NULL, geneset=NULL);
+          session.data$de <- list(startover=FALSE, comparison=NULL, result=NULL, meta=NULL);
+        }, min = 0, max = 100, message = "Loading data collection ... ...", detail = "please wait")
+      }
+    } else session.data$loaded <- NULL; 
   });
+
+  output$home.message<-renderUI({
+    cll <- session.data$loaded;
+    if (identical(NULL, cll)) h5(HTML("Data collection loaded:"), HTML('<b>None</b>')) else 
+      h5(HTML("Data collection loaded:"), HTML('<b><u>', geex.html.msg(cll$name), '</u></b>'))
+  }); 
+
+  output$home.download.table <- downloadHandler(
+    filename = function() { 'data_collection.txt' },
+    content  = function(file) {
+      tbl <- data.frame(ID=rownames(coll), coll, stringsAsFactors=FALSE); 
+      write.table(tbl, file, sep='\t', row.names = FALSE, quote = FALSE);
+    }
+  );
   
-  output$home.table <- DT::renderDataTable({
-    data.frame(ID=rownames(coll), coll, stringsAsFactors=FALSE)
-  }, options=list(dom = 't'), selection='single', rownames=FALSE, escape=FALSE);
+  output$home.download.column <- downloadHandler(
+    filename = function() { 'column_description.txt' },
+    content  = function(file) {
+     tbl <- readRDS('data/collection_column.rds');
+     write.table(tbl, file, sep='\t', row.names = FALSE, quote = FALSE);
+    }
+  );
   
   session.data;
 }
